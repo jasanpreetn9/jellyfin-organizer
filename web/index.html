@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jellyfin Anime Organizer</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>🎬 Jellyfin Anime Organizer</h1>
+  <span class="header-right">
+    <div id="health" class="health">checking…</div>
+    <button id="settingsBtn" class="btn small">⚙ Settings</button>
+  </span>
+</header>
+
+<section id="settingsPanel" class="panel settings" hidden>
+  <h2>Settings <span class="muted small">stored in <code id="cfgPath">config.json</code></span></h2>
+  <div class="settings-grid">
+    <label>Jellyfin URL
+      <input id="cfgUrl" type="text" placeholder="http://192.168.1.10:8096" autocomplete="off">
+    </label>
+    <label>API key <span class="muted small">(Jellyfin Dashboard → API Keys)</span>
+      <input id="cfgKey" type="password" autocomplete="new-password">
+    </label>
+    <label>Default user <span class="muted small">(for webhook/scheduled runs)</span>
+      <input id="cfgUser" type="text" placeholder="username" autocomplete="off">
+    </label>
+    <label>Webhook delay (seconds)
+      <input id="cfgDelay" type="number" min="0" step="1">
+    </label>
+    <label>Webhook token <span class="muted small">(optional)</span>
+      <input id="cfgToken" type="password" autocomplete="new-password">
+    </label>
+    <label>Schedule interval (minutes, 0 = off)
+      <input id="cfgSched" type="number" min="0" step="1">
+    </label>
+    <label>Port <span class="muted small">(restart to apply)</span>
+      <input id="cfgPort" type="number" min="1" max="65535" step="1">
+    </label>
+  </div>
+  <div class="settings-actions">
+    <button id="cfgSaveBtn" class="btn primary">Save settings</button>
+    <span id="cfgStatus" class="muted small"></span>
+  </div>
+</section>
+
+<main>
+  <!-- ============ Browse sidebar ============ -->
+  <aside class="panel browse">
+    <h2>Browse</h2>
+    <label>User
+      <select id="userSelect"><option value="">loading…</option></select>
+    </label>
+    <label>Library
+      <select id="viewSelect" disabled><option value="">—</option></select>
+    </label>
+    <label>Search shows
+      <input id="seriesSearch" type="search" placeholder="filter by name…" disabled>
+    </label>
+    <ul id="seriesList" class="series-list"></ul>
+  </aside>
+
+  <!-- ============ Show / episodes ============ -->
+  <section class="panel show">
+    <div id="showEmpty" class="empty">Pick a user, library and show on the left.</div>
+
+    <div id="showContent" hidden>
+      <div class="show-head">
+        <h2 id="showTitle"></h2>
+        <span id="epStats" class="muted"></span>
+      </div>
+
+      <div class="actions">
+        <label>Action
+          <select id="actionSelect">
+            <option value="set_absolute">Set index → absolute number</option>
+            <option value="tag_filler">Tag fillers — “(FILLER) ” title prefix</option>
+            <option value="both">Both (index + filler tag)</option>
+            <option value="untag_filler">Remove filler tags</option>
+          </select>
+        </label>
+        <label class="grow">Filler episodes (absolute numbers)
+          <input id="fillerRanges" type="text" placeholder="e.g. 26, 97, 101-106, 136-140">
+        </label>
+        <label class="grow">Skip episodes — never modified (absolute numbers)
+          <input id="skipRanges" type="text" placeholder="e.g. 1-5, 12">
+        </label>
+        <label class="check"><input id="nfoRefresh" type="checkbox" checked> write NFO</label>
+        <label class="check" title="Auto rules re-run on Sonarr webhooks and on the regular schedule; unchecked = manual only"><input id="autoRule" type="checkbox" checked> auto</label>
+        <button id="previewBtn" class="btn">Preview (dry-run)</button>
+        <button id="applyBtn" class="btn primary">Apply</button>
+        <button id="saveRuleBtn" class="btn" title="Save as a rule: used by “Run all”, the schedule, and Sonarr webhooks">💾 Save rule</button>
+      </div>
+
+      <table id="epTable">
+        <thead>
+          <tr><th>S/E</th><th>Index</th><th>Abs</th><th>Title <span class="muted small">(click to edit)</span></th><th>File</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ Rules ============ -->
+  <section class="panel rules">
+    <div class="panel-head">
+      <h2>Rules <span class="muted small">saved jobs — “Run all”, Sonarr webhook, and <span id="schedInfo">schedule</span></span></h2>
+      <span>
+        <button id="runAllDryBtn" class="btn small">Run all (dry)</button>
+        <button id="runAllBtn" class="btn small primary">Run all</button>
+      </span>
+    </div>
+    <ul id="rulesList" class="rules-list"></ul>
+    <details>
+      <summary>Import CSV (jellyfin_batch.txt format)</summary>
+      <p class="muted small">One per line: <code>series_id,username,action,filler_ranges</code> — actions: set_index, tag_filler, both</p>
+      <textarea id="importText" rows="4" placeholder="96ca44f7b190…,jnagra,set_index,&#10;fd9667e513a0…,jnagra,tag_filler,26, 97, 101-106"></textarea>
+      <button id="importBtn" class="btn small">Import as rules</button>
+    </details>
+  </section>
+
+  <!-- ============ Activity ============ -->
+  <section class="panel activity">
+    <div class="panel-head">
+      <h2>Activity</h2>
+      <button id="refreshRunsBtn" class="btn small">↻</button>
+    </div>
+    <ul id="runsList" class="runs-list"></ul>
+  </section>
+</main>
+
+<!-- ============ Run log drawer ============ -->
+<div id="logDrawer" class="drawer" hidden>
+  <div class="panel-head">
+    <h2 id="logTitle">Run</h2>
+    <span>
+      <span id="logStatus" class="badge"></span>
+      <button id="logCloseBtn" class="btn small">✕</button>
+    </span>
+  </div>
+  <pre id="logBody" class="log"></pre>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

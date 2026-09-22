@@ -1,0 +1,9 @@
+services:
+  jellyfin-organizer:
+    build: .
+    container_name: jellyfin-organizer
+    ports:
+      - "8981:8981"   # keep "port": "8981" in data/config.json when using Docker
+    volumes:
+      - ./data:/data  # holds config.json (credentials + settings) and rules.json
+    restart: unless-stopped

@@ -1,0 +1,5 @@
+.env
+data/
+dist/
+jellyfin-organizer
+.DS_Store
