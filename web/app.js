@@ -112,6 +112,16 @@ async function saveSettings() {
 
 // ---------- browse ----------
 
+// Remember the last user/library picked so a page reload doesn't make you
+// re-navigate from scratch — pure per-browser convenience, nothing server-side.
+const LAST_PICK_KEY = "jfo.lastPick";
+function saveLastPick() {
+  try { localStorage.setItem(LAST_PICK_KEY, JSON.stringify({ userId: state.userId, viewId: state.viewId })); } catch {}
+}
+function loadLastPick() {
+  try { return JSON.parse(localStorage.getItem(LAST_PICK_KEY) || "{}"); } catch { return {}; }
+}
+
 async function loadUsers() {
   const sel = $("userSelect");
   try {
@@ -122,29 +132,48 @@ async function loadUsers() {
   }
   sel.innerHTML = '<option value="">— pick a user —</option>' +
     state.users.map((u) => `<option value="${u.id}">${esc(u.name)}</option>`).join("");
+  const last = loadLastPick();
+  if (last.userId && state.users.some((u) => u.id === last.userId)) {
+    sel.value = last.userId;
+    await onUserChange(last.viewId);
+  }
 }
 
-async function onUserChange() {
+async function onUserChange(restoreViewId) {
   state.userId = $("userSelect").value;
   state.viewId = "";
   state.series = [];
+  saveLastPick();
   renderSeriesList();
   const sel = $("viewSelect");
   sel.disabled = !state.userId;
   $("seriesSearch").disabled = true;
   sel.innerHTML = "<option value=''>—</option>";
-  if (!state.userId) return;
+  $("seriesList").innerHTML = '<li class="muted">loading libraries…</li>';
+  if (!state.userId) {
+    renderSeriesList();
+    return;
+  }
   const views = await api(`/api/users/${state.userId}/views`);
   sel.innerHTML = '<option value="">— pick a library —</option>' +
     views.map((v) => `<option value="${v.id}">${esc(v.name)} [${esc(v.collectionType)}]</option>`).join("");
+  renderSeriesList();
+  if (restoreViewId && views.some((v) => v.id === restoreViewId)) {
+    sel.value = restoreViewId;
+    await onViewChange();
+  }
 }
 
 async function onViewChange() {
   state.viewId = $("viewSelect").value;
   state.series = [];
-  renderSeriesList();
+  saveLastPick();
   $("seriesSearch").disabled = !state.viewId;
-  if (!state.viewId) return;
+  if (!state.viewId) {
+    renderSeriesList();
+    return;
+  }
+  $("seriesList").innerHTML = '<li class="muted">loading shows…</li>';
   state.series = await api(`/api/users/${state.userId}/views/${state.viewId}/series`);
   renderSeriesList();
 }
@@ -158,6 +187,15 @@ function renderSeriesList() {
   const q = $("seriesSearch").value.trim().toLowerCase();
   const list = $("seriesList");
   list.innerHTML = "";
+  if (!state.userId) {
+    list.innerHTML = '<li class="muted">pick a user and library</li>';
+    return;
+  }
+  if (!state.viewId) {
+    list.innerHTML = '<li class="muted">pick a library</li>';
+    return;
+  }
+  let shown = 0;
   for (const s of state.series) {
     if (q && !s.name.toLowerCase().includes(q)) continue;
     const li = document.createElement("li");
@@ -165,6 +203,10 @@ function renderSeriesList() {
     li.className = state.show && state.show.id === s.id ? "active" : "";
     li.onclick = () => selectShow(s);
     list.appendChild(li);
+    shown++;
+  }
+  if (shown === 0) {
+    list.innerHTML = `<li class="muted">${state.series.length ? "no matches" : "no shows in this library"}</li>`;
   }
 }
 
@@ -175,17 +217,72 @@ async function selectShow(s) {
   $("showContent").hidden = false;
   $("showTitle").textContent = displayName(s);
   $("epStats").textContent = "loading episodes…";
+  // Reset per-show fields before loading a rule (if any) — otherwise the
+  // previous show's filler/skip ranges and action leak into this one.
+  const rule = state.rules.find((r) => r.seriesId === s.id);
+  $("fillerRanges").value = rule?.fillerRanges || "";
+  $("skipRanges").value = rule?.skipRanges || "";
+  $("actionSelect").value = rule?.action || "set_absolute";
+  $("nfoRefresh").checked = rule ? rule.nfoRefresh : true;
+  $("autoRule").checked = rule ? rule.auto : true;
+
   state.episodes = await api(`/api/series/${s.id}/episodes`);
   renderEpisodes();
-  // Pre-fill the filler box from an existing rule for this show, if any.
-  const rule = state.rules.find((r) => r.seriesId === s.id);
-  if (rule) {
-    $("fillerRanges").value = rule.fillerRanges || "";
-    $("skipRanges").value = rule.skipRanges || "";
-    $("actionSelect").value = rule.action;
-    $("nfoRefresh").checked = rule.nfoRefresh;
-    $("autoRule").checked = rule.auto;
+}
+
+// ---------- range editing (filler/skip fields <-> click-to-toggle table chips) ----------
+
+// Parses "26, 97, 101-106" into a Set of numbers. Silently ignores junk
+// fragments — this only drives client-side chip highlighting, the server
+// re-validates for real when a run/rule is submitted.
+function parseRangesClient(s) {
+  const set = new Set();
+  for (const part of (s || "").split(",")) {
+    const p = part.trim();
+    if (!p) continue;
+    if (p.includes("-")) {
+      const [a, b] = p.split("-").map((x) => parseInt(x.trim(), 10));
+      if (Number.isFinite(a) && Number.isFinite(b)) {
+        for (let n = Math.min(a, b); n <= Math.max(a, b); n++) set.add(n);
+      }
+    } else {
+      const n = parseInt(p, 10);
+      if (Number.isFinite(n)) set.add(n);
+    }
   }
+  return set;
+}
+
+// Collapses a Set of numbers back into "26, 97, 101-106" form.
+function formatRanges(set) {
+  const nums = [...set].sort((a, b) => a - b);
+  const parts = [];
+  let start = null, prev = null;
+  for (const n of nums) {
+    if (start === null) { start = prev = n; continue; }
+    if (n === prev + 1) { prev = n; continue; }
+    parts.push(start === prev ? `${start}` : `${start}-${prev}`);
+    start = prev = n;
+  }
+  if (start !== null) parts.push(start === prev ? `${start}` : `${start}-${prev}`);
+  return parts.join(", ");
+}
+
+function toggleRangeNumber(input, num) {
+  const set = parseRangesClient(input.value);
+  if (set.has(num)) set.delete(num); else set.add(num);
+  input.value = formatRanges(set);
+  renderEpisodes();
+}
+
+function chipToggle(label, title, on, kind, onclick) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = `chip-toggle ${kind}${on ? " on" : ""}`;
+  b.textContent = label;
+  b.title = title;
+  b.onclick = (e) => { e.stopPropagation(); onclick(); };
+  return b;
 }
 
 function renderEpisodes() {
@@ -195,18 +292,38 @@ function renderEpisodes() {
   $("epStats").textContent =
     `${eps.length} episodes · ${mismatches} index mismatch(es) · ${fillers} tagged filler`;
 
+  const fillerInput = $("fillerRanges");
+  const skipInput = $("skipRanges");
+  const fillerSet = parseRangesClient(fillerInput.value);
+  const skipSet = parseRangesClient(skipInput.value);
+
   const tbody = $("epTable").querySelector("tbody");
   tbody.innerHTML = "";
   for (const ep of eps) {
     const tr = document.createElement("tr");
-    if (ep.indexMismatch) tr.className = "mismatch";
+    const classes = [];
+    if (ep.indexMismatch) classes.push("mismatch");
+    if (ep.absolute > 0 && skipSet.has(ep.absolute)) classes.push("skip-staged");
+    tr.className = classes.join(" ");
     const se = `S${pad(ep.season)}E${pad(ep.episode)}`;
     tr.innerHTML =
       `<td class="num">${se}</td>` +
       `<td class="num idx">${ep.episode ?? "—"}</td>` +
       `<td class="num abs">${ep.absolute || "—"}</td>` +
+      `<td class="num tags"></td>` +
       `<td class="title"></td>` +
       `<td class="file" title="${esc(ep.fileName)}">${esc(ep.fileName)}</td>`;
+
+    if (ep.absolute > 0) {
+      const tagsTd = tr.querySelector(".tags");
+      tagsTd.append(
+        chipToggle("F", `Toggle abs ${ep.absolute} in the filler field`, fillerSet.has(ep.absolute), "filler",
+          () => toggleRangeNumber(fillerInput, ep.absolute)),
+        chipToggle("S", `Toggle abs ${ep.absolute} in the skip field`, skipSet.has(ep.absolute), "skip",
+          () => toggleRangeNumber(skipInput, ep.absolute)),
+      );
+    }
+
     const titleTd = tr.querySelector(".title");
     titleTd.append(ep.title || "(untitled)");
     if (ep.isFiller) {
@@ -492,6 +609,8 @@ $("cfgSaveBtn").onclick = () => saveSettings();
 $("userSelect").onchange = () => onUserChange().catch(alertErr);
 $("viewSelect").onchange = () => onViewChange().catch(alertErr);
 $("seriesSearch").oninput = renderSeriesList;
+$("fillerRanges").oninput = () => state.episodes.length && renderEpisodes();
+$("skipRanges").oninput = () => state.episodes.length && renderEpisodes();
 $("previewBtn").onclick = () => runCurrent(true).catch(alertErr);
 $("applyBtn").onclick = () => runCurrent(false).catch(alertErr);
 $("saveRuleBtn").onclick = () => saveRule().catch(alertErr);

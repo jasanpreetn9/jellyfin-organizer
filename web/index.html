@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Jellyfin Anime Organizer</title>
 <link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎬</text></svg>">
 </head>
 <body>
 <header>
@@ -59,7 +60,7 @@
     <label>Search shows
       <input id="seriesSearch" type="search" placeholder="filter by name…" disabled>
     </label>
-    <ul id="seriesList" class="series-list"></ul>
+    <ul id="seriesList" class="series-list"><li class="muted">pick a user and library</li></ul>
   </aside>
 
   <!-- ============ Show / episodes ============ -->
@@ -81,10 +82,10 @@
             <option value="untag_filler">Remove filler tags</option>
           </select>
         </label>
-        <label class="grow">Filler episodes (absolute numbers)
+        <label class="grow">Filler episodes (absolute numbers) <span class="muted small">— or click F in the table</span>
           <input id="fillerRanges" type="text" placeholder="e.g. 26, 97, 101-106, 136-140">
         </label>
-        <label class="grow">Skip episodes — never modified (absolute numbers)
+        <label class="grow">Skip episodes — never modified <span class="muted small">— or click S in the table</span>
           <input id="skipRanges" type="text" placeholder="e.g. 1-5, 12">
         </label>
         <label class="check"><input id="nfoRefresh" type="checkbox" checked> write NFO</label>
@@ -96,7 +97,7 @@
 
       <table id="epTable">
         <thead>
-          <tr><th>S/E</th><th>Index</th><th>Abs</th><th>Title <span class="muted small">(click to edit)</span></th><th>File</th></tr>
+          <tr><th>S/E</th><th>Index</th><th>Abs</th><th title="Click F/S to toggle that episode in the filler/skip fields above">Tag</th><th>Title <span class="muted small">(click to edit)</span></th><th>File</th></tr>
         </thead>
         <tbody></tbody>
       </table>

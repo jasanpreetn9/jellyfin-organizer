@@ -152,9 +152,33 @@ td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 td.file { color: var(--muted); font-size: 11px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 tr.mismatch td.abs { color: var(--change); font-weight: 700; }
 tr.mismatch td.idx { color: var(--warn); }
+tr.skip-staged { opacity: .5; }
+tr.skip-staged td.title { text-decoration: line-through; text-decoration-color: var(--muted); }
 td.title { cursor: pointer; }
 td.title:hover { color: var(--accent-2); }
 td.title input { width: 100%; }
+
+td.tags { white-space: nowrap; }
+.chip-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 4px;
+  padding: 0;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+.chip-toggle:hover { border-color: var(--accent-2); color: var(--text); }
+.chip-toggle.filler.on { background: var(--warn); border-color: var(--warn); color: #201400; }
+.chip-toggle.skip.on { background: var(--bad); border-color: var(--bad); color: #200; }
 
 .badge {
   display: inline-block;
