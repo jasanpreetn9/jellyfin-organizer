@@ -86,14 +86,14 @@ func (s *Server) recheckSeries(title, path string) {
 		nfo := false
 		var jobs []core.Job
 		for _, r := range rules {
-			if !r.Auto {
+			if !r.Auto || r.Skipped {
 				continue
 			}
 			jobs = append(jobs, r.Job())
 			nfo = nfo || r.NFORefresh
 		}
 		if len(jobs) == 0 {
-			log.Printf("webhook: %q has rules but all are manual-only — skipping", title)
+			log.Printf("webhook: %q has rules but all are manual-only or skipped — skipping", title)
 			return
 		}
 		log.Printf("webhook: running %d saved rule(s) for %q", len(jobs), title)

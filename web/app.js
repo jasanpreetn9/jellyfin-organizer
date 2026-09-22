@@ -458,6 +458,7 @@ async function loadRules() {
   }
   for (const r of state.rules) {
     const li = document.createElement("li");
+    li.className = r.skipped ? "skipped" : "";
     const name = r.seriesName || r.seriesId;
     const meta = [
       r.action,
@@ -469,20 +470,29 @@ async function loadRules() {
       `<div class="info">` +
       `<div class="title-line"><span class="name" title="${esc(name)}">${esc(name)}</span>` +
       (r.auto ? '<span class="badge schedule">auto</span>' : '<span class="badge dry">manual</span>') +
+      (r.skipped ? '<span class="badge skipped">skipped</span>' : "") +
       `</div>` +
       `<div class="meta" title="${esc(meta)}">${esc(meta)}</div>` +
       `</div>`;
-    const run = btn("▶", "Run this rule now", async () => {
+    const run = btn("▶", "Run this rule now (works even when skipped)", async () => {
       const { runId } = await api(`/api/rules/${r.id}/run`, { method: "POST", body: { dryRun: false } });
       openLog(runId);
       loadRuns();
     });
+    const skip = btn(r.skipped ? "↺" : "⏸",
+      r.skipped
+        ? "Resume — include this rule in “Run all”, the schedule, and the Sonarr webhook again"
+        : "Skip — leave this rule out of “Run all”, the schedule, and the Sonarr webhook until resumed",
+      async () => {
+        await api("/api/rules", { method: "POST", body: { ...r, skipped: !r.skipped } });
+        loadRules();
+      });
     const del = btn("✕", "Delete rule", async () => {
       if (!confirm(`Delete rule for ${r.seriesName}?`)) return;
       await api(`/api/rules/${r.id}`, { method: "DELETE" });
       loadRules();
     });
-    li.append(run, del);
+    li.append(run, skip, del);
     list.appendChild(li);
   }
 }
@@ -511,12 +521,19 @@ async function runAllRules(dryRun) {
     alert("No rules saved yet.");
     return;
   }
-  if (!dryRun && !confirm(`Run all ${state.rules.length} rule(s)?`)) return;
+  const active = state.rules.filter((r) => !r.skipped);
+  if (!active.length) {
+    alert("All saved rules are skipped — resume at least one first.");
+    return;
+  }
+  const skippedNote = active.length < state.rules.length
+    ? ` (${state.rules.length - active.length} skipped rule(s) left out)` : "";
+  if (!dryRun && !confirm(`Run ${active.length} rule(s)?${skippedNote}`)) return;
   await startRun({
     dryRun,
-    nfoRefresh: state.rules.some((r) => r.nfoRefresh),
-    label: `all rules (${state.rules.length})`,
-    jobs: state.rules.map((r) => ({
+    nfoRefresh: active.some((r) => r.nfoRefresh),
+    label: `all rules (${active.length})`,
+    jobs: active.map((r) => ({
       userId: r.userId, seriesId: r.seriesId, seriesName: r.seriesName,
       action: r.action, fillerRanges: r.fillerRanges, skipRanges: r.skipRanges,
     })),

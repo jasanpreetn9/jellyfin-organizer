@@ -115,7 +115,7 @@ func (s *Server) runScheduledRules() {
 	var jobs []core.Job
 	nfo := false
 	for _, r := range s.rules.List() {
-		if !r.Auto {
+		if !r.Auto || r.Skipped {
 			continue
 		}
 		jobs = append(jobs, r.Job())

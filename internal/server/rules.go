@@ -27,6 +27,10 @@ type Rule struct {
 	// Auto rules run on the Sonarr webhook and the regular schedule;
 	// non-auto rules only run when triggered manually.
 	Auto bool `json:"auto"`
+	// Skipped rules are left out of "Run all", the schedule, and the Sonarr
+	// webhook — a way to pause a rule without losing its saved settings.
+	// Running it individually (the rule's own ▶ button) still works.
+	Skipped bool `json:"skipped"`
 }
 
 func (r Rule) Job() core.Job {
