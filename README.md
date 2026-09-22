@@ -99,12 +99,15 @@ webhook run keeps arriving before Jellyfin has picked the episodes up.
 
 ```
 GET  /api/health
+GET  /api/config                      (secrets reported as *Set booleans, never echoed)
+POST /api/config                      {jellyfinUrl, apiKey, username, port, webhookDelaySeconds, webhookToken, scheduleIntervalMinutes}
 GET  /api/users
 GET  /api/users/{userId}/views
 GET  /api/users/{userId}/views/{viewId}/series?search=
+GET  /api/users/{userId}/items/{itemId}
 GET  /api/series/{seriesId}/episodes
 POST /api/items/{itemId}/title        {userId, title}
-POST /api/runs                        {dryRun, nfoRefresh, label, jobs:[{userId, seriesId, seriesName, action, fillerRanges}]}
+POST /api/runs                        {dryRun, nfoRefresh, label, jobs:[{userId, seriesId, seriesName, action, fillerRanges, skipRanges}]}
 GET  /api/runs                        (recent runs)
 GET  /api/runs/{runId}                (status + log)
 GET  /api/rules  /  POST /api/rules  /  DELETE /api/rules/{ruleId}
@@ -112,7 +115,36 @@ POST /api/rules/{ruleId}/run          {dryRun}
 POST /webhook/sonarr[?token=...]      (Sonarr webhook)
 ```
 
-Actions: `set_absolute`, `tag_filler`, `untag_filler`, `both`.
+Actions: `set_absolute`, `tag_filler`, `untag_filler`, `both`. All fields on a `POST /api/config`
+request are optional and omitted/null fields keep their current value — the GUI never has to
+resend the API key just to change, say, the schedule interval.
+
+## Development
+
+```sh
+go build ./...
+go vet ./...
+go test ./...
+```
+
+`internal/core` (absolute-number parsing, filler tagging, range parsing) has unit test
+coverage; the HTTP/Jellyfin-client layers don't, so changes there should be exercised
+against a real Jellyfin server (dry-run first).
+
+### Building the image manually
+
+If Docker Desktop isn't installed, [Podman](https://podman.io) builds and saves
+Docker-compatible images fine — start its VM first (`podman machine start`), then:
+
+```sh
+podman build --platform linux/amd64 -t jellyfin-organizer:latest .
+podman save -o jellyfin-organizer-image-amd64.tar jellyfin-organizer:latest --format docker-archive
+```
+
+Swap `linux/amd64` for `linux/arm64` for an ARM target. `docker load -i
+jellyfin-organizer-image-amd64.tar` on the target host picks it up from there;
+`docker compose up -d` recreates the running container against the freshly loaded
+`:latest` tag.
 
 ## Filler list reference
 
