@@ -90,6 +90,10 @@
     <div id="showEmpty" class="empty">Pick a user, library and show on the left.</div>
 
     <div id="showContent" hidden>
+      <div id="editBanner" class="edit-banner" hidden>
+        <span>✎ Editing saved rule for <b id="editRuleName"></b> — change the fields below, then <b>Update rule</b>.</span>
+        <button id="editCancelBtn" class="btn small">Stop editing</button>
+      </div>
       <div class="show-head">
         <h2 id="showTitle"></h2>
         <span id="epStats" class="muted"></span>
@@ -115,6 +119,7 @@
         <button id="previewBtn" class="btn">Preview (dry-run)</button>
         <button id="applyBtn" class="btn primary">Apply</button>
         <button id="saveRuleBtn" class="btn" title="Save as a rule: used by “Run all”, the schedule, and Sonarr webhooks">💾 Save rule</button>
+        <span id="saveStatus" class="save-status"></span>
       </div>
 
       <table id="epTable">

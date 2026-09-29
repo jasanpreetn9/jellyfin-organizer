@@ -233,6 +233,24 @@ td.tags { white-space: nowrap; }
 .rules-list li > .btn { flex-shrink: 0; width: 28px; height: 26px; padding: 0; }
 .runs-list { max-height: 70vh; overflow-y: auto; }
 .rules-list li.skipped { opacity: .5; }
+.rules-list li { cursor: pointer; border-radius: 6px; }
+.rules-list li:hover { background: var(--panel-2); }
+.rules-list li.editing { background: var(--panel-2); box-shadow: inset 3px 0 0 var(--accent); }
+
+.edit-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: rgba(124, 92, 255, .12);
+  font-size: 13px;
+}
+.edit-banner[hidden] { display: none; }
+.save-status { color: var(--good); font-size: 12px; align-self: center; }
 .runs-list li { cursor: pointer; border-radius: 6px; }
 .runs-list li:hover { background: var(--panel-2); }
 

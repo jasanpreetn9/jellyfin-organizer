@@ -11,6 +11,7 @@ const state = {
   show: null, // {id, name}
   episodes: [],
   rules: [],
+  editingRuleId: null, // set while the show panel is editing a saved rule
   pollTimer: null,
   currentRunId: null,
 };
@@ -202,7 +203,7 @@ function renderSeriesList() {
     const li = document.createElement("li");
     li.textContent = displayName(s);
     li.className = state.show && state.show.id === s.id ? "active" : "";
-    li.onclick = () => selectShow(s);
+    li.onclick = () => selectShow(s).catch(alertErr);
     list.appendChild(li);
     shown++;
   }
@@ -211,24 +212,60 @@ function renderSeriesList() {
   }
 }
 
-async function selectShow(s) {
+// Opens a show in the editor. With editRule, the fields are loaded from that
+// rule and "Save rule" updates it in place; without, any edit mode ends and
+// the first rule for the show (if any) pre-fills the fields.
+async function selectShow(s, editRule = null) {
   state.show = s;
+  state.editingRuleId = editRule ? editRule.id : null;
   renderSeriesList();
+  renderEditMode();
   $("showEmpty").hidden = true;
   $("showContent").hidden = false;
   $("showTitle").textContent = displayName(s);
   $("epStats").textContent = "loading episodes…";
   // Reset per-show fields before loading a rule (if any) — otherwise the
   // previous show's filler/skip ranges and action leak into this one.
-  const rule = state.rules.find((r) => r.seriesId === s.id);
+  const rule = editRule || state.rules.find((r) => r.seriesId === s.id);
   $("fillerRanges").value = rule?.fillerRanges || "";
   $("skipRanges").value = rule?.skipRanges || "";
   $("actionSelect").value = rule?.action || "set_absolute";
   $("nfoRefresh").checked = rule ? rule.nfoRefresh : true;
   $("autoRule").checked = rule ? rule.auto : true;
 
-  state.episodes = await api(`/api/series/${s.id}/episodes`);
+  state.episodes = [];
+  $("epTable").querySelector("tbody").innerHTML = "";
+  const episodes = await api(`/api/series/${s.id}/episodes`);
+  if (state.show !== s) return; // another show was picked while loading
+  state.episodes = episodes;
   renderEpisodes();
+}
+
+function editingRule() {
+  return state.rules.find((r) => r.id === state.editingRuleId) || null;
+}
+
+function editRule(r) {
+  selectShow({ id: r.seriesId, name: r.seriesName }, r).catch(alertErr);
+  $("showContent").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function stopEditing() {
+  state.editingRuleId = null;
+  renderEditMode();
+  loadRules().catch(alertErr);
+}
+
+// Reflects edit mode in the show panel (banner + save button) and the rule list.
+function renderEditMode() {
+  const rule = editingRule();
+  if (!rule) state.editingRuleId = null;
+  $("editBanner").hidden = !rule;
+  if (rule) $("editRuleName").textContent = rule.seriesName || rule.seriesId;
+  $("saveRuleBtn").textContent = rule ? "💾 Update rule" : "💾 Save rule";
+  for (const li of $("rulesList").children) {
+    li.classList.toggle("editing", !!rule && li.dataset.id === rule.id);
+  }
 }
 
 // ---------- range editing (filler/skip fields <-> click-to-toggle table chips) ----------
@@ -368,8 +405,10 @@ function editTitle(ep, td) {
 // ---------- actions / runs ----------
 
 function currentJob() {
+  // An edited rule keeps its own user; browsing as someone else doesn't move it.
+  const rule = editingRule();
   return {
-    userId: state.userId,
+    userId: rule ? rule.userId : state.userId,
     seriesId: state.show.id,
     seriesName: state.show.name,
     action: $("actionSelect").value,
@@ -460,6 +499,9 @@ async function loadRules() {
   for (const r of state.rules) {
     const li = document.createElement("li");
     li.className = r.skipped ? "skipped" : "";
+    li.dataset.id = r.id;
+    li.title = "Click to edit this rule";
+    li.onclick = () => editRule(r);
     const name = r.seriesName || r.seriesId;
     const meta = [
       r.action,
@@ -488,14 +530,16 @@ async function loadRules() {
         await api("/api/rules", { method: "POST", body: { ...r, skipped: !r.skipped } });
         loadRules();
       });
+    const edit = btn("✎", "Edit this rule", () => editRule(r));
     const del = btn("✕", "Delete rule", async () => {
       if (!confirm(`Delete rule for ${r.seriesName}?`)) return;
       await api(`/api/rules/${r.id}`, { method: "DELETE" });
       loadRules();
     });
-    li.append(run, skip, del);
+    li.append(edit, run, skip, del);
     list.appendChild(li);
   }
+  renderEditMode();
 }
 
 async function saveRule() {
@@ -504,17 +548,22 @@ async function saveRule() {
     alert("Enter the filler episode numbers first.");
     return;
   }
-  const existing = state.rules.find((r) => r.seriesId === job.seriesId && r.action === job.action);
+  // Editing updates that rule (even if its action changed); otherwise a rule
+  // with the same show + action is replaced rather than duplicated.
+  const existing = editingRule() ||
+    state.rules.find((r) => r.seriesId === job.seriesId && r.action === job.action);
   await api("/api/rules", {
     method: "POST",
     body: {
       ...job,
       id: existing ? existing.id : "",
+      skipped: existing ? existing.skipped : false,
       nfoRefresh: $("nfoRefresh").checked,
       auto: $("autoRule").checked,
     },
   });
   await loadRules();
+  flashSaved(existing ? "Rule updated" : "Rule saved");
 }
 
 async function runAllRules(dryRun) {
@@ -632,6 +681,7 @@ $("skipRanges").oninput = () => state.episodes.length && renderEpisodes();
 $("previewBtn").onclick = () => runCurrent(true).catch(alertErr);
 $("applyBtn").onclick = () => runCurrent(false).catch(alertErr);
 $("saveRuleBtn").onclick = () => saveRule().catch(alertErr);
+$("editCancelBtn").onclick = stopEditing;
 $("runAllDryBtn").onclick = () => runAllRules(true).catch(alertErr);
 $("runAllBtn").onclick = () => runAllRules(false).catch(alertErr);
 $("importBtn").onclick = () => importCSV().catch(alertErr);
@@ -642,6 +692,13 @@ $("logCloseBtn").onclick = () => {
   clearTimeout(state.pollTimer);
 };
 function alertErr(e) { alert(e.message); }
+
+function flashSaved(text) {
+  const el = $("saveStatus");
+  el.textContent = "✓ " + text;
+  clearTimeout(flashSaved.timer);
+  flashSaved.timer = setTimeout(() => { el.textContent = ""; }, 2500);
+}
 
 loadHealth();
 loadUsers();
