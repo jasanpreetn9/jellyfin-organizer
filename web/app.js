@@ -52,6 +52,7 @@ async function loadHealth() {
     el.textContent = e.message;
     el.className = "health bad";
   }
+  el.title = el.textContent; // full text on hover when truncated
 }
 
 function formatMinutes(m) {

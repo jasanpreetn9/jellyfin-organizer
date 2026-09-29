@@ -48,6 +48,7 @@
 </section>
 
 <main>
+  <div class="col side">
   <!-- ============ Browse sidebar ============ -->
   <aside class="panel browse">
     <h2>Browse</h2>
@@ -63,6 +64,27 @@
     <ul id="seriesList" class="series-list"><li class="muted">pick a user and library</li></ul>
   </aside>
 
+  <!-- ============ Rules ============ -->
+  <section class="panel rules">
+    <div class="panel-head">
+      <h2>Rules</h2>
+      <span class="btn-group">
+        <button id="runAllDryBtn" class="btn small">Run all (dry)</button>
+        <button id="runAllBtn" class="btn small primary">Run all</button>
+      </span>
+    </div>
+    <p class="panel-sub muted small">Saved jobs — used by “Run all”, the Sonarr webhook, and the <span id="schedInfo">schedule</span>.</p>
+    <ul id="rulesList" class="rules-list"></ul>
+    <details>
+      <summary>Import CSV (jellyfin_batch.txt format)</summary>
+      <p class="muted small">One per line: <code>series_id,username,action,filler_ranges</code> — actions: set_index, tag_filler, both</p>
+      <textarea id="importText" rows="4" placeholder="96ca44f7b190…,jnagra,set_index,&#10;fd9667e513a0…,jnagra,tag_filler,26, 97, 101-106"></textarea>
+      <button id="importBtn" class="btn small">Import as rules</button>
+    </details>
+  </section>
+  </div>
+
+  <div class="col">
   <!-- ============ Show / episodes ============ -->
   <section class="panel show">
     <div id="showEmpty" class="empty">Pick a user, library and show on the left.</div>
@@ -104,24 +126,6 @@
     </div>
   </section>
 
-  <!-- ============ Rules ============ -->
-  <section class="panel rules">
-    <div class="panel-head">
-      <h2>Rules <span class="muted small">saved jobs — “Run all”, Sonarr webhook, and <span id="schedInfo">schedule</span></span></h2>
-      <span>
-        <button id="runAllDryBtn" class="btn small">Run all (dry)</button>
-        <button id="runAllBtn" class="btn small primary">Run all</button>
-      </span>
-    </div>
-    <ul id="rulesList" class="rules-list"></ul>
-    <details>
-      <summary>Import CSV (jellyfin_batch.txt format)</summary>
-      <p class="muted small">One per line: <code>series_id,username,action,filler_ranges</code> — actions: set_index, tag_filler, both</p>
-      <textarea id="importText" rows="4" placeholder="96ca44f7b190…,jnagra,set_index,&#10;fd9667e513a0…,jnagra,tag_filler,26, 97, 101-106"></textarea>
-      <button id="importBtn" class="btn small">Import as rules</button>
-    </details>
-  </section>
-
   <!-- ============ Activity ============ -->
   <section class="panel activity">
     <div class="panel-head">
@@ -130,6 +134,7 @@
     </div>
     <ul id="runsList" class="runs-list"></ul>
   </section>
+  </div>
 </main>
 
 <!-- ============ Run log drawer ============ -->
